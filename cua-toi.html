@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quà của tôi · iCitizen</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b6e4f">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+</head>
+<body>
+<main class="wrap">
+  <header class="hero">
+    <img src="icons/logo-header.png" alt="iCitizen" class="logo">
+    <div class="tag">Của tôi</div>
+    <h1 id="ten">Đang tải…</h1>
+  </header>
+
+  <section id="vDangNhap" class="card">
+    <p class="nho">Nhập Số điện thoại đã đăng ký. Mật khẩu mặc định là <b>6 số cuối</b> chính số điện thoại đó.</p>
+    <label>Số điện thoại
+      <input id="sdt" type="tel" inputmode="numeric" maxlength="13" placeholder="09xx xxx xxx">
+    </label>
+    <label>Mật khẩu (6 số cuối SĐT)
+      <input id="mk" inputmode="numeric" maxlength="6" placeholder="xxxxxx">
+    </label>
+    <button class="btn" id="vao">Xem quà của tôi</button>
+    <p id="loiDn" class="loi" hidden></p>
+  </section>
+
+  <section id="vKq" hidden>
+    <div class="card" style="text-align:center">
+      <button class="btn" id="ctaScan">📷 Scan nhận quà ngay</button>
+      <p class="nho" style="margin-bottom:0">Quét mã QR dán trước mỗi quầy để lấy số thứ tự</p>
+    </div>
+    <div class="scan-box" id="scanBox" hidden>
+      <video id="video" playsinline muted></video>
+      <div class="scan-line"></div>
+    </div>
+    <canvas id="canvas" hidden></canvas>
+    <button class="btn phu nho" id="tatCam" type="button" hidden style="margin-bottom:12px;width:100%">Đóng camera</button>
+    <p id="loiCam" class="loi" hidden></p>
+    <div class="card">
+      <h3 id="xinChao">Chào bạn!</h3>
+      <div class="progress"><div class="bg"><div class="fg" id="pgFg" style="width:0%"></div></div><span id="pgTxt" class="nho">0/0</span></div>
+      <div id="dsQua"></div>
+    </div>
+    <div class="card" id="theVe" hidden>
+      <h3>🎉 Bạn đã nhận đủ COMBO — mở khoá vé bốc thăm!</h3>
+      <div class="ticket">
+        <div class="n">MÃ DỰ THƯỞNG</div>
+        <div class="m" id="maBocTham">BT0000</div>
+      </div>
+      <p class="nho">Giữ mã này — Ban tổ chức sẽ công bố thể lệ và thời gian quay số tại sự kiện.</p>
+    </div>
+    <button class="btn phu nho" id="doiTk">Xem mã khác</button>
+  </section>
+</main>
+<div id="toast" class="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var qs = new URLSearchParams(location.search);
+
+ICZ.jsonp('capHinh', []).then(function (ch) { $('ten').textContent = ch.tenSuKien; document.title = ch.tenSuKien + ' · Quà của tôi'; })
+  .catch(function () { $('ten').textContent = 'iCitizen'; });
+
+function xem(sdt, matKhau, im) {
+  ICZ.jsonp('trangThaiCuaToi', [sdt, matKhau]).then(function (r) {
+    if (!r.ok) { if (!im) baoLoiDn(r.loi); return; }
+    try { localStorage.setItem('icz_sdt', sdt); localStorage.setItem('icz_ma', JSON.stringify({ ma: r.ma })); } catch (e) {}
+    $('vDangNhap').hidden = true; $('vKq').hidden = false;
+    $('xinChao').textContent = 'Chào ' + r.hoTen + ' · ' + r.ma;
+    var xong = r.tienDo.filter(function (t) { return t.xong; }).length;
+    $('pgFg').style.width = (r.tienDo.length ? xong / r.tienDo.length * 100 : 0) + '%';
+    $('pgTxt').textContent = xong + '/' + r.tienDo.length + ' quà';
+    $('dsQua').innerHTML = r.tienDo.map(function (t) {
+      return '<div class="gift-row' + (t.xong ? ' xong' : '') + '"><div class="ic">' + (t.xong ? '✓' : '•') + '</div>' +
+        '<div class="txt"><div class="t">' + ICZ.esc(t.ten) + '</div>' +
+        (t.xong ? '<div class="s">Đã nhận lúc ' + ICZ.esc(t.luc) + '</div>' : '<div class="s">Đưa mã ' + ICZ.esc(r.ma) + ' cho nhân viên quầy này</div>') +
+        '</div></div>';
+    }).join('');
+    $('theVe').hidden = !r.hoanThanh;
+    if (r.hoanThanh) {
+      $('maBocTham').textContent = r.maBocTham;
+      anMungDuCombo_(r.ma); // mốc thành công: đủ COMBO, mở khoá vé — chỉ ăn mừng lần đầu thấy, không lặp lại mỗi lần ghé xem
+    }
+  }).catch(function (e) { if (!im) baoLoiDn(e.message); });
+}
+function baoLoiDn(t) { $('loiDn').textContent = t; $('loiDn').hidden = !t; }
+function anMungDuCombo_(ma) {
+  var khoa = 'icz_bt_an_mung_' + ma;
+  try { if (localStorage.getItem(khoa)) return; localStorage.setItem(khoa, '1'); } catch (e) {}
+  ICZ.anMung(140);
+  setTimeout(function () { ICZ.anMung(100); }, 300); // bắn thêm đợt 2 cho rộn ràng
+}
+
+$('vao').onclick = function () {
+  var sdt = $('sdt').value.trim(), mk = $('mk').value.trim();
+  if (!sdt || !mk) return baoLoiDn('Vui lòng nhập đủ số điện thoại và mật khẩu.');
+  xem(sdt, mk);
+};
+$('mk').onkeydown = function (e) { if (e.key === 'Enter') $('vao').onclick(); };
+$('sdt').oninput = function () { var s = this.value.replace(/\D/g, ''); if (s.length >= 6) $('mk').value = s.slice(-6); };
+$('doiTk').onclick = function () {
+  try { localStorage.removeItem('icz_sdt'); localStorage.removeItem('icz_ma'); } catch (e) {}
+  $('vKq').hidden = true; $('vDangNhap').hidden = false; $('sdt').value = ''; $('mk').value = '';
+};
+
+/* ===== CTA "Scan nhận quà ngay": quét QR cố định dán tại booth, dẫn thẳng sang trang lấy số ===== */
+var stream = null, dangQuet = false;
+$('ctaScan').onclick = batCamera;
+$('tatCam').onclick = dungCam;
+function batCamera() {
+  $('loiCam').hidden = true;
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (s) {
+    stream = s;
+    var v = $('video'); v.srcObject = s; v.play();
+    $('scanBox').hidden = false; $('tatCam').hidden = false;
+    dangQuet = true; requestAnimationFrame(quetVongLap);
+  }).catch(function () {
+    $('loiCam').textContent = 'Không mở được camera. Hãy cho phép quyền camera.';
+    $('loiCam').hidden = false;
+  });
+}
+function dungCam() {
+  dangQuet = false;
+  if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+  $('scanBox').hidden = true; $('tatCam').hidden = true;
+}
+function quetVongLap() {
+  if (!dangQuet) return;
+  var v = $('video'), c = $('canvas');
+  if (v.readyState === v.HAVE_ENOUGH_DATA) {
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(v, 0, 0, c.width, c.height);
+    var img = ctx.getImageData(0, 0, c.width, c.height);
+    var qr = window.jsQR(img.data, c.width, c.height);
+    if (qr && qr.data) {
+      var m = String(qr.data).match(/[?&]tram=([^&]+)/);
+      dungCam();
+      if (m) location.href = 'xep-hang.html?tram=' + m[1];
+      else ICZ.toast('Mã QR này không phải mã của Trạm.', false);
+      return;
+    }
+  }
+  requestAnimationFrame(quetVongLap);
+}
+
+// Mở từ link trong pop-up đăng ký (?sdt=), hoặc nhớ lần xem trước trên cùng máy
+var sdtQs = qs.get('sdt');
+if (sdtQs) { $('sdt').value = sdtQs; $('mk').value = sdtQs.replace(/\D/g, '').slice(-6); xem(sdtQs, $('mk').value); }
+else {
+  try {
+    var sdtCu = localStorage.getItem('icz_sdt');
+    if (sdtCu) { $('sdt').value = sdtCu; $('mk').value = sdtCu.replace(/\D/g, '').slice(-6); xem(sdtCu, $('mk').value, true); }
+  } catch (e) {}
+}
+</script>
+</body>
+</html>

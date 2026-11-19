@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iCitizen · Check-in</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b6e4f">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+<main class="wrap">
+  <header class="hero">
+    <img src="icons/logo-header.png" alt="iCitizen" class="logo">
+    <h1 id="ten">Đang tải…</h1>
+    <p>Đăng ký 30 giây để nhận <b>COMBO quà tặng</b></p>
+  </header>
+
+  <div class="tabs" id="tabs">
+    <button type="button" data-v="tay" class="on">✍️ Nhập tay</button>
+    <button type="button" data-v="qr">🪪 Quét QR CCCD</button>
+  </div>
+
+  <!-- Cách 2: quét QR trên mặt sau CCCD gắn chip để tự điền Họ tên + số CCCD -->
+  <section id="panelQr" class="card" hidden>
+    <div id="qrChuaQuet">
+      <p class="nho">Đưa mặt sau thẻ CCCD (có mã QR) vào khung hình. Chỉ lấy Họ tên và số CCCD để điền nhanh — không tự gửi gì cho đến khi bạn bấm Đăng ký.</p>
+      <div class="scan-box">
+        <video id="video" playsinline muted></video>
+        <div class="scan-line"></div>
+      </div>
+      <canvas id="canvas" hidden></canvas>
+      <button class="btn" id="batCam" type="button">Bật camera quét CCCD</button>
+      <p id="loiCam" class="loi" hidden></p>
+    </div>
+    <div id="qrDaQuet" hidden>
+      <div class="kq xong">
+        <b style="font-size:19px" id="qTen"></b><br>
+        <span class="nho">Số CCCD: <span id="qCccd"></span></span>
+      </div>
+      <button class="btn phu nho" id="quetLai" type="button" style="margin-top:10px">↻ Quét lại</button>
+    </div>
+  </section>
+
+  <form id="f" class="card" autocomplete="on" novalidate>
+    <label id="lblHoTen">Họ và tên
+      <input name="hoTen" required maxlength="80" autocomplete="name" placeholder="Nguyễn Văn A">
+    </label>
+    <label>Số điện thoại
+      <input name="sdt" type="tel" inputmode="numeric" required maxlength="13" autocomplete="tel" placeholder="09xx xxx xxx">
+    </label>
+    <div class="lbl">Giới tính</div>
+    <div class="seg" id="gt">
+      <button type="button" data-v="Nam">Nam</button>
+      <button type="button" data-v="Nữ">Nữ</button>
+      <button type="button" data-v="Khác">Khác</button>
+    </div>
+    <label>Xã
+      <input name="xa" required maxlength="60" list="dsxa" placeholder="Xã bạn đang sống">
+      <datalist id="dsxa"></datalist>
+    </label>
+    <label>Năm sinh
+      <input name="sinhNam" type="number" inputmode="numeric" required min="1920" max="2026" maxlength="4" placeholder="VD: 1990">
+    </label>
+    <div class="lbl">Bạn có đang kinh doanh gì không?</div>
+    <div class="seg" id="kd">
+      <button type="button" data-v="Có">Có</button>
+      <button type="button" data-v="Không">Không</button>
+    </div>
+    <label id="rowMatHang" hidden>Mặt hàng / Cửa hàng kinh doanh
+      <input name="matHang" maxlength="120" placeholder="VD: Bán rau củ, tạp hoá…">
+    </label>
+    <label class="chk"><input type="checkbox" name="dongY" checked>
+      <span>Tôi đồng ý để Ban tổ chức dùng thông tin trên cho việc trao quà và liên hệ về chương trình.</span>
+    </label>
+    <label class="chk" id="rowDongYCccd" hidden><input type="checkbox" name="dongYCccd">
+      <span>Tôi đồng ý cung cấp số CCCD vừa quét cho Ban tổ chức, <b>chỉ cho mục đích xác minh và nhận quà</b> của chương trình này, không dùng cho mục đích khác.</span>
+    </label>
+    <p id="loi" class="loi" hidden></p>
+    <button id="gui" class="btn" type="submit">Đăng ký nhận quà</button>
+  </form>
+
+  <p class="nho" style="text-align:center">Lần đầu dùng? <a href="cai-dat.html">Xem cách cài app lên màn hình chính</a> · Đã đăng ký? <a href="cua-toi.html">Xem quà của tôi</a></p>
+  <p class="nho" style="text-align:center;opacity:.6;margin-top:4px"><a href="nhan-vien.html">Nhân viên / Ban tổ chức</a></p>
+</main>
+
+<div id="pop" class="pop" hidden>
+  <div class="pop-box">
+    <div class="ok">✓</div>
+    <h2 id="pTieuDe">Đăng ký thành công!</h2>
+    <p id="pTen" class="ten"></p>
+    <div class="ma" id="pMa"></div>
+    <div id="pQr" class="qr"></div>
+    <p class="nho">Chụp màn hình này · đưa mã cho nhân viên tại từng quầy</p>
+    <div class="combo">
+      <b>Bạn nhận COMBO quà tặng:</b>
+      <ul id="pCombo"></ul>
+    </div>
+    <a class="btn phu" id="pXemQua" href="cua-toi.html" style="margin-bottom:10px;display:block">Xem quà của tôi</a>
+    <button class="btn" id="dong">Xong</button>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+var NGUON = new URLSearchParams(location.search).get('nguon') === 'kiosk' ? 'Kiosk' : 'QR';
+var gioiTinh = '';
+var cccdDaQuet = ''; // số CCCD vừa quét được (rỗng = đang ở chế độ nhập tay)
+var f = document.getElementById('f');
+var gui = document.getElementById('gui');
+var loi = document.getElementById('loi');
+var COMBO = [];
+var $ = function (id) { return document.getElementById(id); };
+
+ICZ.jsonp('capHinh', []).then(function (ch) {
+  $('ten').textContent = ch.tenSuKien;
+  document.title = ch.tenSuKien + ' · Check-in';
+  var dl = $('dsxa');
+  ch.xaGoiY.forEach(function (x) { var o = document.createElement('option'); o.value = x; dl.appendChild(o); });
+  COMBO = ch.combo;
+}).catch(function () { $('ten').textContent = 'iCitizen Check-in'; });
+
+document.querySelectorAll('#gt button').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('#gt button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on'); gioiTinh = b.dataset.v;
+  };
+});
+
+var kinhDoanh = '';
+document.querySelectorAll('#kd button').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('#kd button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on'); kinhDoanh = b.dataset.v;
+    $('rowMatHang').hidden = kinhDoanh !== 'Có';
+  };
+});
+
+function baoLoi(t) { loi.textContent = t; loi.hidden = !t; }
+
+/* ===== Chuyển tab Nhập tay / Quét QR CCCD ===== */
+document.querySelectorAll('#tabs button').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('#tabs button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    var qr = b.dataset.v === 'qr';
+    $('panelQr').hidden = !qr;
+    if (!qr) dungCam();
+  };
+});
+
+/* ===== Quét QR mặt sau CCCD (jsQR, xử lý ngay trên máy, không gửi ảnh đi đâu) ===== */
+var stream = null, dangQuet = false;
+$('batCam').onclick = batCamera;
+$('quetLai').onclick = function () { lamMoiKetQuaQuet(); batCamera(); };
+
+function batCamera() {
+  $('loiCam').hidden = true;
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (s) {
+    stream = s;
+    var v = $('video'); v.srcObject = s; v.play();
+    dangQuet = true; requestAnimationFrame(quetVongLap);
+  }).catch(function () {
+    $('loiCam').textContent = 'Không mở được camera. Hãy cho phép quyền camera, hoặc chuyển sang "Nhập tay".';
+    $('loiCam').hidden = false;
+  });
+}
+function dungCam() {
+  dangQuet = false;
+  if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+}
+function quetVongLap() {
+  if (!dangQuet) return;
+  var v = $('video'), c = $('canvas');
+  if (v.readyState === v.HAVE_ENOUGH_DATA) {
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(v, 0, 0, c.width, c.height);
+    var img = ctx.getImageData(0, 0, c.width, c.height);
+    var ma = window.jsQR(img.data, c.width, c.height);
+    if (ma && ma.data) { xuLyQrCccd(ma.data); return; }
+  }
+  requestAnimationFrame(quetVongLap);
+}
+
+/** Mã QR mặt sau CCCD gắn chip: các trường cách nhau bởi "|" — số CCCD|số CMND cũ|Họ tên|ngày sinh|giới tính|địa chỉ|ngày cấp. */
+function xuLyQrCccd(text) {
+  var p = String(text).split('|');
+  if (p.length < 5 || !/^\d{12}$/.test(p[0])) {
+    $('loiCam').textContent = 'Đây chưa phải mã QR mặt sau CCCD. Thử lại hoặc chuyển sang "Nhập tay".';
+    $('loiCam').hidden = false;
+    requestAnimationFrame(quetVongLap);
+    return;
+  }
+  dungCam();
+  cccdDaQuet = p[0];
+  var ten = chuanHoaTen_(p[2] || '');
+  f.hoTen.value = ten;
+  if (p[4] === 'Nam' || p[4] === 'Nữ') {
+    gioiTinh = p[4];
+    document.querySelectorAll('#gt button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === gioiTinh); });
+  }
+  var xa = doXaTuDiaChi_(p[5] || '');
+  if (xa) f.xa.value = xa;
+  var namSinhTuCccd = String(p[3] || '').match(/^\d{2}\d{2}(\d{4})$/); // DDMMYYYY
+  if (namSinhTuCccd) f.sinhNam.value = namSinhTuCccd[1];
+  $('qrChuaQuet').hidden = true; $('qrDaQuet').hidden = false;
+  $('qTen').textContent = ten; $('qCccd').textContent = cccdDaQuet.replace(/(\d{3})(\d{3})(\d{3})(\d{3})/, '$1 $2 $3 $4');
+  $('lblHoTen').hidden = true; // đã có tên từ CCCD, ẩn ô nhập tay cho gọn
+  $('rowDongYCccd').hidden = false;
+  f.sdt.focus();
+}
+function lamMoiKetQuaQuet() {
+  cccdDaQuet = ''; $('qrChuaQuet').hidden = false; $('qrDaQuet').hidden = true;
+  $('lblHoTen').hidden = false; $('rowDongYCccd').hidden = true; f.dongYCccd.checked = false;
+}
+/** "NGUYỄN VĂN A" → "Nguyễn Văn A" (giữ nguyên dấu tiếng Việt, JS toLowerCase xử lý đúng Unicode). */
+function chuanHoaTen_(s) {
+  return s.toLowerCase().replace(/(^|\s)\p{L}/gu, function (m) { return m.toUpperCase(); });
+}
+/** Dò cụm "Xã ..."/"Phường ..."/"Thị trấn ..." trong địa chỉ thường trú trên CCCD — chỉ để gợi ý, khách tự sửa được. */
+function doXaTuDiaChi_(diaChi) {
+  var phan = String(diaChi).split(',').map(function (x) { return x.trim(); });
+  for (var i = 0; i < phan.length; i++) {
+    var m = phan[i].match(/^(Xã|Phường|Thị trấn)\s+(.+)$/i);
+    if (m) return m[2];
+  }
+  return '';
+}
+
+f.onsubmit = function (e) {
+  e.preventDefault();
+  var d = {
+    hoTen: f.hoTen.value.trim(), sdt: f.sdt.value.trim(), gioiTinh: gioiTinh,
+    xa: f.xa.value.trim(), dongY: f.dongY.checked, nguon: NGUON,
+    cccd: cccdDaQuet, dongYCccd: f.dongYCccd.checked,
+    sinhNam: Number(f.sinhNam.value), kinhDoanh: kinhDoanh, matHang: f.matHang.value.trim()
+  };
+  if (d.hoTen.length < 2) return baoLoi('Vui lòng nhập họ tên.');
+  if (!/^(\+?84|0)[35789]\d{8}$/.test(d.sdt.replace(/[\s.\-]/g, ''))) return baoLoi('Số điện thoại chưa đúng (10 số, bắt đầu bằng 0).');
+  if (!d.gioiTinh) return baoLoi('Vui lòng chọn giới tính.');
+  if (!d.xa) return baoLoi('Vui lòng nhập xã.');
+  if (!d.sinhNam || d.sinhNam < 1920 || d.sinhNam > 2026) return baoLoi('Vui lòng nhập đúng năm sinh.');
+  if (!d.kinhDoanh) return baoLoi('Vui lòng cho biết bạn có đang kinh doanh gì không.');
+  if (!d.dongY) return baoLoi('Vui lòng tick đồng ý để nhận quà.');
+  if (d.cccd && !d.dongYCccd) return baoLoi('Vui lòng đồng ý để lưu số CCCD vừa quét (hoặc bấm "Quét lại" rồi chọn Nhập tay).');
+  baoLoi(''); gui.disabled = true; gui.textContent = 'Đang gửi…';
+  ICZ.jsonp('dangKy', [d]).then(function (r) {
+    gui.disabled = false; gui.textContent = 'Đăng ký nhận quà';
+    if (!r.ok) return baoLoi(r.loi);
+    moPop(r, true);
+  }).catch(function (err) {
+    gui.disabled = false; gui.textContent = 'Đăng ký nhận quà';
+    baoLoi(err.message);
+  });
+};
+
+var hen;
+function moPop(r, vuaGui) {
+  document.getElementById('pTieuDe').textContent = r.trung ? 'Bạn đã đăng ký trước đó' : 'Đăng ký thành công!';
+  document.getElementById('pTen').textContent = r.hoTen;
+  document.getElementById('pMa').textContent = r.ma;
+  var ul = document.getElementById('pCombo'); ul.innerHTML = '';
+  (r.combo || COMBO).forEach(function (x) { var li = document.createElement('li'); li.textContent = x; ul.appendChild(li); });
+  var box = document.getElementById('pQr'); box.innerHTML = '';
+  try {
+    var q = qrcode(0, 'M'); q.addData(location.origin + location.pathname.replace(/index\.html$/, '') + 'tram.html?ma=' + encodeURIComponent(r.ma)); q.make();
+    box.innerHTML = q.createSvgTag({ cellSize: 5, margin: 2 });
+  } catch (e) { box.hidden = true; }
+  $('pXemQua').href = 'cua-toi.html?sdt=' + encodeURIComponent(f.sdt.value.trim());
+  document.getElementById('pop').hidden = false;
+  if (vuaGui && !r.trung) ICZ.anMung(); // mốc thành công: chỉ ăn mừng ngay lúc vừa đăng ký mới, không lặp lại khi mở lại trang
+  try { localStorage.setItem('icz_ma', JSON.stringify(r)); localStorage.setItem('icz_sdt', f.sdt.value.trim()); } catch (e) {}
+  if (NGUON === 'Kiosk') hen = setTimeout(dongPop, 20000);
+}
+function dongPop() {
+  clearTimeout(hen);
+  document.getElementById('pop').hidden = true;
+  if (NGUON === 'Kiosk') {
+    f.reset(); gioiTinh = ''; kinhDoanh = ''; $('rowMatHang').hidden = true; lamMoiKetQuaQuet();
+    document.querySelectorAll('#gt button, #kd button').forEach(function (x) { x.classList.remove('on'); });
+    f.hoTen.focus();
+  }
+}
+document.getElementById('dong').onclick = dongPop;
+
+if (NGUON !== 'Kiosk') {
+  try { var cu = JSON.parse(localStorage.getItem('icz_ma') || 'null'); if (cu && cu.ma) moPop(cu); } catch (e) {}
+}
+</script>
+</body>
+</html>

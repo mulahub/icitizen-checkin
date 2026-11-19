@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard · iCitizen</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b6e4f">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wrap wide">
+  <header class="hero">
+    <img src="icons/logo-header.png" alt="iCitizen" class="logo">
+    <div class="tag">Dashboard quản trị</div>
+    <h1 id="ten">Đang tải…</h1>
+    <p id="cn" class="nho"></p>
+  </header>
+
+  <section id="vDangNhap" class="card" style="max-width:420px;margin:0 auto">
+    <label>Số điện thoại
+      <input id="sdt" type="tel" inputmode="numeric" maxlength="13" placeholder="09xx xxx xxx">
+    </label>
+    <label>Mật khẩu
+      <input id="mk" type="password" placeholder="••••••">
+    </label>
+    <button class="btn" id="dangNhap">Đăng nhập</button>
+    <p id="loiDn" class="loi" hidden></p>
+  </section>
+
+  <section id="vDb" hidden>
+    <div class="row" style="margin-bottom:14px">
+      <button class="btn nho" id="xuat">⬇ Xuất file Excel (CSV)</button>
+      <button class="btn nho phu" id="xuatBt">🎟 Xuất danh sách bốc thăm</button>
+      <button class="btn nho phu" id="lamMoi">↻ Làm mới</button>
+      <a class="btn nho phu" href="tram.html">Mở trang Trạm</a>
+      <a class="btn nho phu" href="index.html?nguon=kiosk">Mở Form Kiosk</a>
+      <button class="btn nho phu" id="dangXuat">Đăng xuất (<span id="tenNv"></span>)</button>
+      <span class="nho">Tự làm mới mỗi 30 giây</span>
+      <label class="chk" style="display:inline-flex;align-items:center;gap:8px;margin:0">
+        <input type="checkbox" id="baoKhachMoi">
+        <span class="nho" style="margin:0">🔔 Báo khi có khách đăng ký mới</span>
+      </label>
+    </div>
+
+    <div class="grid" id="kpi"></div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+      <div class="card"><h3>Theo trạm / quà</h3><table id="tTram"></table></div>
+      <div class="card"><h3>Theo xã (top 12)</h3><table id="tXa"></table></div>
+      <div class="card"><h3>Lượt check-in theo giờ</h3><table id="tGio"></table></div>
+    </div>
+
+    <div class="card">
+      <h3>20 lượt check-in gần nhất</h3>
+      <div style="overflow:auto"><table id="tGan"></table></div>
+    </div>
+
+    <div class="card">
+      <h3>👤 Quản lý tài khoản nhân viên</h3>
+      <div style="overflow:auto"><table id="tTk"></table></div>
+      <details style="margin-top:14px">
+        <summary style="cursor:pointer;font-weight:700;color:var(--c)">+ Thêm nhân viên mới</summary>
+        <div style="margin-top:12px">
+          <label>Họ tên <input id="nvTen" maxlength="80" placeholder="Chị Hoa quầy quà"></label>
+          <label>Số điện thoại (dùng để đăng nhập) <input id="nvSdt" type="tel" inputmode="numeric" maxlength="13" placeholder="09xx xxx xxx"></label>
+          <label>Mật khẩu <input id="nvMk" type="text" placeholder="ít nhất 4 ký tự"></label>
+          <div class="lbl">Vai trò</div>
+          <div class="seg" id="nvVaiTro" style="margin-bottom:14px">
+            <button type="button" data-v="tram" class="on">Nhân viên quầy (Trạm)</button>
+            <button type="button" data-v="admin">Quản trị (Dashboard)</button>
+          </div>
+          <button class="btn" id="nvThem">Thêm nhân viên</button>
+          <p id="loiNv" class="loi" hidden></p>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h3>🔑 Đổi mật khẩu của tôi</h3>
+      <label>Mật khẩu mới <input id="mkMoi" type="text" placeholder="ít nhất 4 ký tự"></label>
+      <button class="btn phu nho" id="doiMk">Đổi mật khẩu</button>
+    </div>
+
+    <p class="nho" style="text-align:center"><a href="cai-dat.html">Trang hướng dẫn cài app</a> · <a href="cua-toi.html">Trang "Của tôi" (khách tự xem quà)</a> · <a href="nhan-vien.html">Vai khác</a></p>
+  </section>
+</main>
+<div id="toast" class="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+var SDT = '', MK = '';
+var $ = function (id) { return document.getElementById(id); };
+
+ICZ.jsonp('capHinh', []).then(function (ch) {
+  $('ten').textContent = ch.tenSuKien; document.title = ch.tenSuKien + ' · Dashboard';
+}).catch(function () { $('ten').textContent = 'iCitizen'; });
+
+function bang(dong, max) {
+  return dong.map(function (r) {
+    var w = max ? Math.max(2, Math.round(r[1] / max * 100)) : 0;
+    return '<tr><td>' + ICZ.esc(r[0]) + '</td><td style="width:45%"><div class="bar" style="width:' + w + '%"></div></td><td><b>' + r[1] + '</b></td></tr>';
+  }).join('') || '<tr><td class="nho">Chưa có dữ liệu</td></tr>';
+}
+
+var tongKhachCu = -1; // -1 = chưa có mốc so sánh (vừa đăng nhập/mở trang) — không báo giả lần đầu
+function taiThongKe(im) {
+  ICZ.jsonp('thongKe', [SDT, MK]).then(function (d) {
+    if (tongKhachCu >= 0 && d.tong > tongKhachCu && $('baoKhachMoi').checked) baoKhachMoi_(d.tong - tongKhachCu, d.tong);
+    tongKhachCu = d.tong;
+    $('cn').textContent = 'Cập nhật ' + d.capNhat;
+    var g = d.gioiTinh;
+    $('kpi').innerHTML = [
+      ['Tổng khách check-in', d.tong],
+      ['Nam', g['Nam'] || 0], ['Nữ', g['Nữ'] || 0], ['Khác', g['Khác'] || 0],
+      ['Tự quét QR', d.nguon.QR || 0], ['Nhân viên nhập (Kiosk)', d.nguon.Kiosk || 0],
+      ['🎟 Đủ COMBO (vé bốc thăm)', d.soBocTham || 0]
+    ].map(function (k) { return '<div class="kpi"><div class="s">' + k[1].toLocaleString('vi-VN') + '</div><div class="t">' + ICZ.esc(k[0]) + '</div></div>'; }).join('');
+    var maxT = Math.max.apply(null, d.theoTram.map(function (t) { return t.so; }).concat([1]));
+    $('tTram').innerHTML = bang(d.theoTram.map(function (t) { return [t.ten, t.so]; }), maxT);
+    $('tXa').innerHTML = bang(d.xaTop, d.xaTop.length ? d.xaTop[0][1] : 1);
+    var gio = Object.keys(d.theoGio).sort().map(function (h) { return [h, d.theoGio[h]]; });
+    $('tGio').innerHTML = bang(gio, Math.max.apply(null, gio.map(function (x) { return x[1]; }).concat([1])));
+    $('tGan').innerHTML = '<tr><th>Giờ</th><th>Mã</th><th>Họ tên</th><th>SĐT</th><th>Giới tính</th><th>Xã</th><th>Nguồn</th></tr>' +
+      d.ganDay.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + ICZ.esc(c) + '</td>'; }).join('') + '</tr>'; }).join('');
+  }).catch(function (e) { if (!im) ICZ.toast(e.message, false); });
+}
+
+/** Báo có khách mới — toast+rung luôn hiện (trang đang mở); Notification trình duyệt thêm khi tab đang ở nền. */
+function baoKhachMoi_(soMoi, tongMoi) {
+  ICZ.toast('🔔 ' + soMoi + ' khách mới vừa đăng ký · Tổng ' + tongMoi, true);
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+    try { new Notification('iCitizen · Khách mới', { body: soMoi + ' khách mới vừa đăng ký — tổng ' + tongMoi, icon: 'icons/icon-192.png' }); } catch (e) {}
+  }
+}
+$('baoKhachMoi').checked = (function () { try { return localStorage.getItem('icz_bao_khach_moi') === '1'; } catch (e) { return false; } })();
+$('baoKhachMoi').onchange = function () {
+  try { localStorage.setItem('icz_bao_khach_moi', this.checked ? '1' : '0'); } catch (e) {}
+  if (this.checked && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+};
+
+function taiNhanVien() {
+  ICZ.jsonp('dsNhanVien', [SDT, MK]).then(function (ds) {
+    $('tTk').innerHTML = '<tr><th>Tên</th><th>SĐT</th><th>Vai trò</th><th>Tạo lúc</th><th></th></tr>' +
+      ds.map(function (nv) {
+        var tuMinh = nv.sdt === SDT;
+        return '<tr><td>' + ICZ.esc(nv.ten) + '</td><td>' + ICZ.esc(nv.sdt) + '</td><td>' + (nv.vaiTro === 'admin' ? 'Quản trị' : 'Trạm') + '</td>' +
+          '<td class="nho">' + ICZ.esc(nv.taoLuc) + '</td>' +
+          '<td>' + (tuMinh ? '<span class="nho">(bạn)</span>' : '<button class="btn phu nho" data-xoa="' + ICZ.esc(nv.sdt) + '">Xoá</button>') + '</td></tr>';
+      }).join('');
+    $('tTk').querySelectorAll('button[data-xoa]').forEach(function (b) {
+      b.onclick = function () {
+        if (!confirm('Xoá tài khoản ' + b.dataset.xoa + '?')) return;
+        ICZ.jsonp('xoaNhanVien', [SDT, MK, b.dataset.xoa]).then(function (r) {
+          if (!r.ok) return ICZ.toast(r.loi, false);
+          ICZ.toast('Đã xoá', true); taiNhanVien();
+        }).catch(function (e) { ICZ.toast(e.message, false); });
+      };
+    });
+  }).catch(function (e) { ICZ.toast(e.message, false); });
+}
+
+function tai(im) { taiThongKe(im); taiNhanVien(); }
+
+var vaiTroMoi = 'tram';
+document.querySelectorAll('#nvVaiTro button').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('#nvVaiTro button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on'); vaiTroMoi = b.dataset.v;
+  };
+});
+
+$('nvThem').onclick = function () {
+  var ten = $('nvTen').value.trim(), sdt = $('nvSdt').value.trim(), mk = $('nvMk').value;
+  if (ten.length < 2) return baoLoiNv('Vui lòng nhập tên.');
+  if (!sdt) return baoLoiNv('Vui lòng nhập số điện thoại.');
+  if (mk.length < 4) return baoLoiNv('Mật khẩu cần ít nhất 4 ký tự.');
+  baoLoiNv('');
+  ICZ.jsonp('themNhanVien', [SDT, MK, sdt, ten, mk, vaiTroMoi]).then(function (r) {
+    if (!r.ok) return baoLoiNv(r.loi);
+    ICZ.toast('Đã thêm nhân viên', true);
+    $('nvTen').value = ''; $('nvSdt').value = ''; $('nvMk').value = '';
+    taiNhanVien();
+  }).catch(function (e) { baoLoiNv(e.message); });
+};
+function baoLoiNv(t) { $('loiNv').textContent = t; $('loiNv').hidden = !t; }
+
+$('doiMk').onclick = function () {
+  var mkMoi = $('mkMoi').value;
+  if (mkMoi.length < 4) return ICZ.toast('Mật khẩu mới cần ít nhất 4 ký tự.', false);
+  ICZ.jsonp('doiMatKhau', [SDT, MK, mkMoi]).then(function (r) {
+    if (!r.ok) return ICZ.toast(r.loi, false);
+    MK = mkMoi; try { localStorage.setItem('icz_tk_mk', MK); } catch (e) {}
+    $('mkMoi').value = ''; ICZ.toast('Đã đổi mật khẩu', true);
+  }).catch(function (e) { ICZ.toast(e.message, false); });
+};
+
+function dangNhap(sdt, mk, im) {
+  ICZ.jsonp('dangNhapAdmin', [sdt, mk]).then(function (r) {
+    SDT = sdt; MK = mk;
+    try { localStorage.setItem('icz_tk_sdt', sdt); localStorage.setItem('icz_tk_mk', mk); } catch (e) {}
+    $('tenNv').textContent = r.ten;
+    $('vDangNhap').hidden = true; $('vDb').hidden = false;
+    tai();
+  }).catch(function (e) {
+    try { localStorage.removeItem('icz_tk_sdt'); localStorage.removeItem('icz_tk_mk'); } catch (e2) {}
+    if (!im) { $('loiDn').textContent = e.message; $('loiDn').hidden = false; }
+  });
+}
+
+$('dangNhap').onclick = function () { dangNhap($('sdt').value.trim(), $('mk').value); };
+$('mk').onkeydown = function (e) { if (e.key === 'Enter') $('dangNhap').onclick(); };
+$('lamMoi').onclick = function () { tai(true); };
+$('dangXuat').onclick = function () {
+  try { localStorage.removeItem('icz_tk_sdt'); localStorage.removeItem('icz_tk_mk'); } catch (e) {}
+  location.reload();
+};
+$('xuat').onclick = function () {
+  var b = this; b.disabled = true; b.textContent = 'Đang xuất…';
+  ICZ.jsonp('xuatCsv', [SDT, MK]).then(function (csv) {
+    b.disabled = false; b.textContent = '⬇ Xuất file Excel (CSV)';
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    var t = new Date(); var p = function (n) { return ('0' + n).slice(-2); };
+    a.download = 'icitizen-checkin-' + t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()) + '-' + p(t.getHours()) + p(t.getMinutes()) + '.csv';
+    a.href = URL.createObjectURL(blob); document.body.appendChild(a); a.click(); a.remove();
+    ICZ.toast('Đã xuất file', true);
+  }).catch(function (e) { b.disabled = false; b.textContent = '⬇ Xuất file Excel (CSV)'; ICZ.toast(e.message, false); });
+};
+$('xuatBt').onclick = function () {
+  var b = this; b.disabled = true; b.textContent = 'Đang xuất…';
+  ICZ.jsonp('xuatBocTham', [SDT, MK]).then(function (csv) {
+    b.disabled = false; b.textContent = '🎟 Xuất danh sách bốc thăm';
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.download = 'icitizen-boc-tham.csv';
+    a.href = URL.createObjectURL(blob); document.body.appendChild(a); a.click(); a.remove();
+    ICZ.toast('Đã xuất danh sách bốc thăm', true);
+  }).catch(function (e) { b.disabled = false; b.textContent = '🎟 Xuất danh sách bốc thăm'; ICZ.toast(e.message, false); });
+};
+
+var sdtCu = '', mkCu = '';
+try { sdtCu = localStorage.getItem('icz_tk_sdt') || ''; mkCu = localStorage.getItem('icz_tk_mk') || ''; } catch (e) {}
+if (sdtCu && mkCu) dangNhap(sdtCu, mkCu, true);
+setInterval(function () { if (SDT && !$('vDb').hidden) taiThongKe(true); }, 30000);
+</script>
+</body>
+</html>

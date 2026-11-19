@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lấy số · iCitizen</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b6e4f">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+<main class="wrap">
+  <header class="hero">
+    <img src="icons/logo-header.png" alt="iCitizen" class="logo">
+    <div class="tag" id="tagTram">Tự lấy số</div>
+    <h1 id="ten">Đang tải…</h1>
+  </header>
+
+  <section id="vDangNhap" class="card">
+    <p class="nho">Nhập đúng Số điện thoại và Mã đã nhận lúc đăng ký ở cổng check-in (ví dụ <b>SR0127</b>) để lấy số thứ tự tại quầy này.</p>
+    <label>Số điện thoại
+      <input id="sdt" type="tel" inputmode="numeric" maxlength="13" placeholder="09xx xxx xxx">
+    </label>
+    <label>Mã của bạn
+      <input id="ma" maxlength="10" autocapitalize="characters" placeholder="SR0127">
+    </label>
+    <div id="hoiMat" hidden>
+      <div class="lbl">Bạn có đang gặp vấn đề gì về mắt không?</div>
+      <div class="seg" id="mat">
+        <button type="button" data-v="Có">Có</button>
+        <button type="button" data-v="Không">Không</button>
+      </div>
+    </div>
+    <button class="btn" id="vao">Lấy số thứ tự</button>
+    <p id="loiDn" class="loi" hidden></p>
+  </section>
+
+  <section id="vKq" hidden class="card" style="text-align:center">
+    <p class="nho" id="tenKhach"></p>
+    <div class="ticket">
+      <div class="n">SỐ THỨ TỰ CỦA BẠN</div>
+      <div class="m" id="soThuTu">0</div>
+    </div>
+    <p class="nho">Vui lòng chờ nhân viên gọi đúng số — không cần xếp hàng vật lý.</p>
+    <button class="btn phu nho" id="lamLai">Lấy số nơi khác</button>
+  </section>
+</main>
+<div id="toast" class="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var MA_TRAM = new URLSearchParams(location.search).get('tram') || '';
+var dapAnMat = '';
+
+ICZ.jsonp('capHinh', []).then(function (ch) {
+  document.title = ch.tenSuKien + ' · Lấy số';
+  var t = ch.tram.filter(function (x) { return x.ma === MA_TRAM; })[0];
+  if (!t) { $('ten').textContent = 'Không tìm thấy quầy này'; $('vDangNhap').hidden = true; return; }
+  $('ten').textContent = t.ten;
+  $('tagTram').textContent = t.ten;
+  $('hoiMat').hidden = MA_TRAM !== 'KHAM_MAT';
+}).catch(function () { $('ten').textContent = 'iCitizen'; });
+
+document.querySelectorAll('#mat button').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('#mat button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on'); dapAnMat = b.dataset.v;
+  };
+});
+
+function baoLoiDn(t) { $('loiDn').textContent = t; $('loiDn').hidden = !t; }
+
+$('vao').onclick = function () {
+  var sdt = $('sdt').value.trim(), ma = $('ma').value.trim();
+  if (!sdt || !ma) return baoLoiDn('Vui lòng nhập đủ số điện thoại và mã.');
+  if (MA_TRAM === 'KHAM_MAT' && !dapAnMat) return baoLoiDn('Vui lòng chọn Có/Không cho câu hỏi về mắt.');
+  baoLoiDn('');
+  var b = $('vao'); b.disabled = true; b.textContent = 'Đang lấy số…';
+  ICZ.jsonp('laySoThuTu', [sdt, ma, MA_TRAM, dapAnMat]).then(function (r) {
+    b.disabled = false; b.textContent = 'Lấy số thứ tự';
+    if (!r.ok) return baoLoiDn(r.loi);
+    try { localStorage.setItem('icz_sdt', sdt); localStorage.setItem('icz_ma', JSON.stringify({ ma: ma })); } catch (e) {}
+    $('vDangNhap').hidden = true; $('vKq').hidden = false;
+    $('tenKhach').textContent = 'Mã ' + ma;
+    $('soThuTu').textContent = r.soThuTu;
+    if (!r.trung) ICZ.anMung(120);
+  }).catch(function (e) { b.disabled = false; b.textContent = 'Lấy số thứ tự'; baoLoiDn(e.message); });
+};
+$('ma').onkeydown = function (e) { if (e.key === 'Enter') $('vao').onclick(); };
+$('lamLai').onclick = function () { $('vKq').hidden = true; $('vDangNhap').hidden = false; };
+
+try {
+  var sdtCu = localStorage.getItem('icz_sdt'); var maCu = JSON.parse(localStorage.getItem('icz_ma') || 'null');
+  if (sdtCu && maCu && maCu.ma) { $('sdt').value = sdtCu; $('ma').value = maCu.ma; }
+} catch (e) {}
+</script>
+</body>
+</html>
