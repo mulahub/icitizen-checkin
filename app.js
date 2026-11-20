@@ -1,36 +1,42 @@
-// Tiện ích dùng chung cho cả 3 trang. Gọi API Apps Script bằng JSONP (thẻ <script>)
-// để tránh CORS, vì trang này (GitHub Pages) và Apps Script khác tên miền.
+// Tiện ích dùng chung cho mọi trang. Gọi API Cloudflare Workers + D1 qua fetch() POST
+// (nhanh < 30ms, chịu tải hàng nghìn người, không dính 302/JSONP của Apps Script).
 (function (w) {
-  function jsonpOnce(fn, args, timeoutMs) {
-    return new Promise(function (resolve, reject) {
-      var cb = '_icz_' + Date.now().toString(36) + Math.random().toString(36).slice(2);
-      var done = false;
-      function don(ok, v, retryable) {
-        if (done) return; done = true;
-        clearTimeout(timer); delete w[cb]; s.remove();
-        if (ok) return resolve(v);
-        var err = new Error(v);
-        err._retry = !!retryable;
-        reject(err);
+  function goiApiLan(fn, args, timeoutMs) {
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, timeoutMs || 12000);
+    return fetch(w.APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fn: fn, args: args || [] }),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (res) {
+      clearTimeout(timer);
+      if (!res.ok) {
+        var eHttp = new Error('Máy chủ bận (' + res.status + '), thử lại.');
+        eHttp._retry = res.status >= 500;
+        throw eHttp;
       }
-      w[cb] = function (out) {
-        out && out.ok ? don(true, out.data) : don(false, (out && out.loi) || 'Lỗi không rõ', false);
-      };
-      var s = document.createElement('script');
-      s.src = w.APPS_SCRIPT_URL + '?fn=' + encodeURIComponent(fn) +
-        '&args=' + encodeURIComponent(JSON.stringify(args || [])) + '&cb=' + cb;
-      s.onerror = function () { don(false, 'Mất mạng hoặc máy chủ không phản hồi.', true); };
-      document.body.appendChild(s);
-      var timer = setTimeout(function () { don(false, 'Hết thời gian chờ, thử lại.', true); }, timeoutMs || 15000);
+      return res.json();
+    }, function (err) {
+      clearTimeout(timer);
+      var msg = (err && err.name === 'AbortError')
+        ? 'Hết thời gian chờ, thử lại.'
+        : 'Mất mạng hoặc máy chủ không phản hồi.';
+      var eNet = new Error(msg);
+      eNet._retry = true;
+      throw eNet;
+    }).then(function (out) {
+      if (out && out.ok) return out.data;
+      throw new Error((out && out.loi) || 'Lỗi không rõ');
     });
   }
 
   function jsonp(fn, args, timeoutMs) {
     var left = 2;
     function thu() {
-      return jsonpOnce(fn, args, timeoutMs).catch(function (err) {
+      return goiApiLan(fn, args, timeoutMs).catch(function (err) {
         if (!err._retry || left-- <= 0) throw err;
-        return new Promise(function (r) { setTimeout(r, 600); }).then(thu);
+        return new Promise(function (r) { setTimeout(r, 500); }).then(thu);
       });
     }
     return thu();
