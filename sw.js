@@ -1,7 +1,7 @@
 // Service worker: trang HTML luôn lấy bản MỚI NHẤT khi có mạng (network-first) — tránh lặp lỗi
 // "sửa xong vẫn thấy bản cũ" vì app đang sửa nhanh mỗi ngày. Tài nguyên tĩnh (css/js/icon) mới
 // cache-first cho nhanh. KHÔNG cache lượt gọi API — check-in luôn cần mạng để ghi đúng Google Sheet.
-var CACHE = 'icitizen-v7';
+var CACHE = 'icitizen-v8';
 var VO = ['./', 'index.html', 'tram.html', 'admin.html', 'cua-toi.html', 'cai-dat.html', 'nhan-vien.html', 'xep-hang.html',
   'style.css', 'app.js', 'config.js', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/logo-header.png'];
 
@@ -38,10 +38,11 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  // Tài nguyên tĩnh: cache-first cho nhanh, vẫn tự cập nhật cache ngầm mỗi lần có mạng.
+  // Tài nguyên tĩnh: trả cache ngay cho nhanh, nhưng luôn tải lại ngầm để lần sau có bản mới.
   e.respondWith(
     caches.match(e.request).then(function (hit) {
-      return hit || fetch(e.request).then(function (res) { return luuCache_(e.request, res); }).catch(function () { return hit; });
+      var net = fetch(e.request).then(function (res) { return luuCache_(e.request, res); }).catch(function () { return hit; });
+      return hit || net;
     })
   );
 });

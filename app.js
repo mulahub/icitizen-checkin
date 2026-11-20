@@ -1,25 +1,39 @@
 // Tiện ích dùng chung cho cả 3 trang. Gọi API Apps Script bằng JSONP (thẻ <script>)
 // để tránh CORS, vì trang này (GitHub Pages) và Apps Script khác tên miền.
 (function (w) {
-  function jsonp(fn, args, timeoutMs) {
+  function jsonpOnce(fn, args, timeoutMs) {
     return new Promise(function (resolve, reject) {
       var cb = '_icz_' + Date.now().toString(36) + Math.random().toString(36).slice(2);
       var done = false;
-      function don(ok, v) {
+      function don(ok, v, retryable) {
         if (done) return; done = true;
         clearTimeout(timer); delete w[cb]; s.remove();
-        ok ? resolve(v) : reject(new Error(v));
+        if (ok) return resolve(v);
+        var err = new Error(v);
+        err._retry = !!retryable;
+        reject(err);
       }
       w[cb] = function (out) {
-        out && out.ok ? don(true, out.data) : don(false, (out && out.loi) || 'Lỗi không rõ');
+        out && out.ok ? don(true, out.data) : don(false, (out && out.loi) || 'Lỗi không rõ', false);
       };
       var s = document.createElement('script');
       s.src = w.APPS_SCRIPT_URL + '?fn=' + encodeURIComponent(fn) +
         '&args=' + encodeURIComponent(JSON.stringify(args || [])) + '&cb=' + cb;
-      s.onerror = function () { don(false, 'Mất mạng hoặc máy chủ không phản hồi.'); };
+      s.onerror = function () { don(false, 'Mất mạng hoặc máy chủ không phản hồi.', true); };
       document.body.appendChild(s);
-      var timer = setTimeout(function () { don(false, 'Hết thời gian chờ, thử lại.'); }, timeoutMs || 15000);
+      var timer = setTimeout(function () { don(false, 'Hết thời gian chờ, thử lại.', true); }, timeoutMs || 15000);
     });
+  }
+
+  function jsonp(fn, args, timeoutMs) {
+    var left = 2;
+    function thu() {
+      return jsonpOnce(fn, args, timeoutMs).catch(function (err) {
+        if (!err._retry || left-- <= 0) throw err;
+        return new Promise(function (r) { setTimeout(r, 600); }).then(thu);
+      });
+    }
+    return thu();
   }
 
   function esc(s) {

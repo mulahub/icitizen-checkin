@@ -71,7 +71,10 @@ ICZ.jsonp('capHinh', []).then(function (ch) { $('ten').textContent = ch.tenSuKie
   .catch(function () { $('ten').textContent = 'iCitizen'; });
 
 function xem(sdt, matKhau, im) {
+  var b = $('vao');
+  if (!im) { baoLoiDn(''); b.disabled = true; b.textContent = 'Đang kiểm tra…'; }
   ICZ.jsonp('trangThaiCuaToi', [sdt, matKhau]).then(function (r) {
+    b.disabled = false; b.textContent = 'Xem quà của tôi';
     if (!r.ok) { if (!im) baoLoiDn(r.loi); return; }
     try { localStorage.setItem('icz_sdt', sdt); localStorage.setItem('icz_ma', JSON.stringify({ ma: r.ma })); } catch (e) {}
     $('vDangNhap').hidden = true; $('vKq').hidden = false;
@@ -90,7 +93,7 @@ function xem(sdt, matKhau, im) {
       $('maBocTham').textContent = r.maBocTham;
       anMungDuCombo_(r.ma); // mốc thành công: đủ COMBO, mở khoá vé — chỉ ăn mừng lần đầu thấy, không lặp lại mỗi lần ghé xem
     }
-  }).catch(function (e) { if (!im) baoLoiDn(e.message); });
+  }).catch(function (e) { b.disabled = false; b.textContent = 'Xem quà của tôi'; if (!im) baoLoiDn(e.message); });
 }
 function baoLoiDn(t) { $('loiDn').textContent = t; $('loiDn').hidden = !t; }
 function anMungDuCombo_(ma) {
